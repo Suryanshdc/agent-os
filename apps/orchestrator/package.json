@@ -7,5 +7,9 @@
     "dev": "tsx watch --env-file=../../.env src/index.ts",
     "typecheck": "tsc -p ."
   },
-  "dependencies": { "@aios/shared": "*" }
+  "dependencies": {
+    "@aios/shared": "*",
+    "@langchain/core": "^1.4.1",
+    "@langchain/langgraph": "^1.7.4"
+  }
 }

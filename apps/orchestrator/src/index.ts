@@ -14,9 +14,8 @@ import {
   type TaskEventType,
   type TaskSubmitted,
 } from "@aios/shared";
-import { DEFAULT_WORKFLOW, layers } from "./dag.js";
+import { buildWorkflow } from "./workflow.js";
 
-const MAX_STEPS = 10; // guard against runaway workflows
 const STEP_TIMEOUT_MS = 30_000;
 
 const kafka = createKafka("orchestrator");
@@ -27,7 +26,6 @@ type Pending = { resolve: (r: AgentResult) => void; timer: NodeJS.Timeout };
 const pending = new Map<string, Pending>();
 
 // Per-instance group: results must reach the instance that is awaiting them.
-// (In production, key pending state in Redis/Postgres so any replica can resume.)
 await subscribe<AgentResult>({
   kafka,
   producer,
@@ -48,55 +46,31 @@ function emit(task: TaskSubmitted, type: TaskEventType, payload?: unknown) {
   return publish(producer, TOPICS.taskEvents, task.taskId, event);
 }
 
-function callAgent(req: AgentRequest): Promise<AgentResult> {
-  return new Promise(async (resolve) => {
-    const key = `${req.taskId}:${req.stepId}`;
+function callAgentOverKafka(task: TaskSubmitted, agent: string, stepId: string, input: string): Promise<AgentResult> {
+  return new Promise((resolve) => {
+    // A unique id per attempt so a retry never mixes up with a late reply from the previous try.
+    const attemptId = `${stepId}#${randomUUID().slice(0, 8)}`;
+    const key = `${task.taskId}:${attemptId}`;
     const timer = setTimeout(() => {
       pending.delete(key);
-      resolve({ taskId: req.taskId, stepId: req.stepId, agent: req.agent, error: "timeout" });
+      resolve({ taskId: task.taskId, stepId: attemptId, agent, error: "timeout" });
     }, STEP_TIMEOUT_MS);
     pending.set(key, { resolve, timer });
-    await publish(producer, TOPICS.agentRequests(req.agent), req.taskId, req);
+    const req: AgentRequest = { taskId: task.taskId, stepId: attemptId, agent, input, context: {} };
+    void publish(producer, TOPICS.agentRequests(agent), task.taskId, req);
   });
 }
 
 async function runTask(task: TaskSubmitted) {
   await emit(task, "task.started");
-  const results: Record<string, string> = {};
-  let steps = 0;
-  let totalCost = 0;
-
   try {
-    for (const layer of layers(DEFAULT_WORKFLOW)) {
-      steps += layer.length;
-      if (steps > MAX_STEPS) throw new Error("max steps exceeded");
-
-      const layerResults = await Promise.all(
-        layer.map(async (node) => {
-          await emit(task, "step.started", { step: node.id, agent: node.agent });
-          const res = await callAgent({
-            taskId: task.taskId,
-            stepId: node.id,
-            agent: node.agent,
-            input: node.buildInput(task.prompt, results),
-            context: results,
-          });
-          return { node, res };
-        }),
-      );
-
-      for (const { node, res } of layerResults) {
-        if (res.error) {
-          await emit(task, "step.failed", { step: node.id, error: res.error });
-          throw new Error(`step ${node.id} failed: ${res.error}`);
-        }
-        results[node.id] = res.output ?? "";
-        totalCost += res.usage?.costUsd ?? 0;
-        await emit(task, "step.completed", { step: node.id, usage: res.usage });
-      }
-    }
-    const finalStep = DEFAULT_WORKFLOW[DEFAULT_WORKFLOW.length - 1]!.id;
-    await emit(task, "task.completed", { answer: results[finalStep], totalCostUsd: totalCost });
+    const graph = buildWorkflow(
+      (agent, stepId, input) => callAgentOverKafka(task, agent, stepId, input),
+      (type, payload) => emit(task, type, payload),
+    );
+    // recursionLimit is the loop guard: the graph stops if it runs too many steps.
+    const out = await graph.invoke({ prompt: task.prompt }, { recursionLimit: 10 });
+    await emit(task, "task.completed", { answer: out.answer, totalCostUsd: out.costUsd });
   } catch (err) {
     await emit(task, "task.failed", { error: String(err) });
   }
