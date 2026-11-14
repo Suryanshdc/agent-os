@@ -1,0 +1,41 @@
+services:
+  redpanda:
+    image: redpandadata/redpanda:v24.1.1
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092"]
+
+  redpanda-console:
+    image: redpandadata/console:v2.6.0
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports: ["8080:8080"]
+    depends_on: [redpanda]
+
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/devpassword
+    ports: ["7474:7474", "7687:7687"]
+    volumes: ["neo4j_data:/data"]
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: aios
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: aios
+    ports: ["5433:5432"]
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+
+volumes:
+  neo4j_data:
+  pg_data:
