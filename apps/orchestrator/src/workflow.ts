@@ -39,6 +39,14 @@ async function withRetry(
   throw new Error(`step ${stepId} failed after ${MAX_ATTEMPTS} attempts: ${last?.error}`);
 }
 
+/**
+ * Decides whether a question is about writing code.
+ * A simple keyword check for now; Phase 3 replaces it with a smarter LLM router.
+ */
+export function needsCode(prompt: string): boolean {
+  return /\b(code|function|script|implement|program|class|regex|typescript|javascript|python|snippet|bug)\b/i.test(prompt);
+}
+
 export function buildWorkflow(callAgent: CallAgent, notify: Notify) {
   return new StateGraph(State)
     .addNode("retrieve", async (s) => {
@@ -50,8 +58,18 @@ export function buildWorkflow(callAgent: CallAgent, notify: Notify) {
       const r = await withRetry(callAgent, notify, "research", "research", input);
       return { answer: r.output ?? "", costUsd: r.usage?.costUsd ?? 0 };
     })
+    .addNode("codegen", async (s) => {
+      const input = `Task: ${s.prompt}\n\nContext:\n${s.context}`;
+      const r = await withRetry(callAgent, notify, "codegen", "codegen", input);
+      return { answer: r.output ?? "", costUsd: r.usage?.costUsd ?? 0 };
+    })
     .addEdge(START, "retrieve")
-    .addEdge("retrieve", "research")
+    // The fork: coding questions go to codegen, everything else to research.
+    .addConditionalEdges("retrieve", (s) => (needsCode(s.prompt) ? "codegen" : "research"), {
+      codegen: "codegen",
+      research: "research",
+    })
     .addEdge("research", END)
+    .addEdge("codegen", END)
     .compile();
 }

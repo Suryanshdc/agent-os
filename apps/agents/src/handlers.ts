@@ -24,4 +24,12 @@ const research: Handler = async (req) => {
   return { output: text, usage };
 };
 
-export const HANDLERS: Record<string, Handler> = { retrieval, research };
+const codegen: Handler = async (req) => {
+  const { text, usage } = await complete(
+    req.input,
+    "You are a code generation agent. Reply with working code in one fenced block, then a short explanation.",
+  );
+  return { output: text, usage };
+};
+
+export const HANDLERS: Record<string, Handler> = { retrieval, research, codegen };
