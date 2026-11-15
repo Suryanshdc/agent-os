@@ -6,6 +6,7 @@ import {
   createProducer,
   ensureTopics,
   publish,
+  saveTask,
   subscribe,
   TaskSubmittedSchema,
   type AgentRequest,
@@ -56,7 +57,7 @@ function callAgentOverKafka(task: TaskSubmitted, agent: string, stepId: string, 
       resolve({ taskId: task.taskId, stepId: attemptId, agent, error: "timeout" });
     }, STEP_TIMEOUT_MS);
     pending.set(key, { resolve, timer });
-    const req: AgentRequest = { taskId: task.taskId, stepId: attemptId, agent, input, context: {} };
+    const req: AgentRequest = { taskId: task.taskId, stepId: attemptId, agent, userId: task.userId, input, context: {} };
     void publish(producer, TOPICS.agentRequests(agent), task.taskId, req);
   });
 }
@@ -71,6 +72,8 @@ async function runTask(task: TaskSubmitted) {
     // recursionLimit is the loop guard: the graph stops if it runs too many steps.
     const out = await graph.invoke({ prompt: task.prompt }, { recursionLimit: 10 });
     await emit(task, "task.completed", { answer: out.answer, totalCostUsd: out.costUsd });
+    // Remember this task so later questions can find it (never blocks or fails the task).
+    await saveTask({ userId: task.userId, taskId: task.taskId, prompt: task.prompt, answer: out.answer });
   } catch (err) {
     await emit(task, "task.failed", { error: String(err) });
   }

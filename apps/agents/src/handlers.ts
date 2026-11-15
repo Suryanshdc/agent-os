@@ -1,4 +1,4 @@
-import { complete, routeModel, type AgentRequest, type AgentResult } from "@aios/shared";
+import { complete, recall, routeModel, type AgentRequest, type AgentResult } from "@aios/shared";
 
 export type Handler = (req: AgentRequest) => Promise<Pick<AgentResult, "output" | "usage">>;
 
@@ -12,8 +12,16 @@ const DOCS = [
 
 const retrieval: Handler = async (req) => {
   const terms = req.input.toLowerCase().split(/\W+/).filter((t) => t.length > 3);
-  const hits = DOCS.filter((d) => terms.some((t) => d.toLowerCase().includes(t)));
-  return { output: hits.length ? hits.join("\n") : "No relevant context found." };
+  const docHits = DOCS.filter((d) => terms.some((t) => d.toLowerCase().includes(t)));
+
+  // Memory: this user's own earlier tasks about the same topics (from the Neo4j graph).
+  const memories = req.userId ? await recall(req.userId, req.input) : [];
+  const fromMemory = memories.map(
+    (m) => `Earlier you asked "${m.prompt}" and the answer was: ${m.answer.slice(0, 200)}`,
+  );
+
+  const all = [...fromMemory, ...docHits];
+  return { output: all.length ? all.join("\n") : "No relevant context found." };
 };
 
 // Pick the cheapest model that can handle the question (judged on the question only, not the context).

@@ -31,6 +31,7 @@ export interface AgentRequest {
   taskId: string;
   stepId: string;
   agent: string;
+  userId?: string;
   input: string;
   context: Record<string, string>;
 }
