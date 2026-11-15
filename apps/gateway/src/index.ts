@@ -9,7 +9,9 @@ import {
   createKafka,
   createProducer,
   ensureTopics,
+  m,
   publish,
+  registry,
   subscribe,
   type TaskEvent,
   type TaskSubmitted,
@@ -50,6 +52,9 @@ await subscribe<TaskEvent>({
 
 app.get("/health", async () => ({ ok: true }));
 
+// Metrics for Prometheus. Open on purpose for local dev; protect or firewall it in production.
+app.get("/metrics", async (_req, reply) => reply.header("content-type", registry.contentType).send(await registry.metrics()));
+
 app.post("/auth/login", async (req, reply) => {
   const body = z.object({ username: z.string(), password: z.string() }).safeParse(req.body);
   if (!body.success) return reply.code(400).send({ error: "invalid body" });
@@ -75,6 +80,7 @@ app.post(
       submittedAt: new Date().toISOString(),
     };
     await publish(producer, TOPICS.tasksSubmitted, task.taskId, task);
+    m.tasksSubmitted.inc();
     return reply.code(202).send({ taskId: task.taskId });
   },
 );

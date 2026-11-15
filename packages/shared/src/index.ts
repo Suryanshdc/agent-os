@@ -3,3 +3,4 @@ export * from "./kafka.js";
 export * from "./llm.js";
 export * from "./router.js";
 export * from "./memory.js";
+export * from "./metrics.js";

@@ -15,12 +15,22 @@ export async function complete(
   const started = Date.now();
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
-  // Mock mode: free and deterministic, ideal for dev and tests.
+  // Mock mode: free and deterministic. Token counts and cost are SIMULATED
+  // (about 4 characters per token, 300 output tokens) so dashboards have realistic-looking data.
   if (!apiKey) {
     await new Promise((r) => setTimeout(r, 150));
+    const inputTokens = Math.ceil(prompt.length / 4);
+    const outputTokens = 300;
+    const price = priceFor(model);
     return {
       text: `[mock:${model}] ${prompt.slice(0, 200)}`,
-      usage: { model: `mock:${model}`, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs: Date.now() - started },
+      usage: {
+        model: `mock:${model}`,
+        inputTokens,
+        outputTokens,
+        costUsd: (inputTokens * price.inputPerMTok + outputTokens * price.outputPerMTok) / 1_000_000,
+        latencyMs: Date.now() - started,
+      },
     };
   }
 

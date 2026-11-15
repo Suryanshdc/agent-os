@@ -5,8 +5,10 @@ import {
   createKafka,
   createProducer,
   ensureTopics,
+  m,
   publish,
   saveTask,
+  startMetricsServer,
   subscribe,
   TaskSubmittedSchema,
   type AgentRequest,
@@ -18,6 +20,8 @@ import {
 import { buildWorkflow } from "./workflow.js";
 
 const STEP_TIMEOUT_MS = 30_000;
+
+startMetricsServer(Number(process.env.METRICS_PORT ?? 9101));
 
 const kafka = createKafka("orchestrator");
 await ensureTopics(kafka, [TOPICS.tasksSubmitted, TOPICS.taskEvents, TOPICS.agentResults, TOPICS.deadLetter]);
@@ -64,17 +68,25 @@ function callAgentOverKafka(task: TaskSubmitted, agent: string, stepId: string, 
 
 async function runTask(task: TaskSubmitted) {
   await emit(task, "task.started");
+  const stopTimer = m.taskDuration.startTimer();
   try {
     const graph = buildWorkflow(
       (agent, stepId, input) => callAgentOverKafka(task, agent, stepId, input),
-      (type, payload) => emit(task, type, payload),
+      (type, payload) => {
+        if (type === "step.failed") m.stepFailures.inc();
+        return emit(task, type, payload);
+      },
     );
     // recursionLimit is the loop guard: the graph stops if it runs too many steps.
     const out = await graph.invoke({ prompt: task.prompt }, { recursionLimit: 10 });
+    stopTimer();
+    m.tasksTotal.inc({ status: "completed" });
     await emit(task, "task.completed", { answer: out.answer, totalCostUsd: out.costUsd });
     // Remember this task so later questions can find it (never blocks or fails the task).
     await saveTask({ userId: task.userId, taskId: task.taskId, prompt: task.prompt, answer: out.answer });
   } catch (err) {
+    stopTimer();
+    m.tasksTotal.inc({ status: "failed" });
     await emit(task, "task.failed", { error: String(err) });
   }
 }
