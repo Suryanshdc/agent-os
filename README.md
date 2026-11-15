@@ -46,6 +46,8 @@ flowchart LR
 
 Multi-agent LLM platform: Fastify gateway -> Kafka (Redpanda) -> DAG orchestrator -> agents.
 
+![Grafana dashboard](grafana-dashboard.png)
+
 
 ## Run it
 
