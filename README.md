@@ -1,6 +1,9 @@
 # Agent OS (TypeScript)
 
+![Neo4j memory graph](memory-graph.png)
+
 Multi-agent LLM platform: Fastify gateway -> Kafka (Redpanda) -> DAG orchestrator -> agents.
+
 
 ## Run it
 
