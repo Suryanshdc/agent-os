@@ -4,6 +4,7 @@
   "type": "module",
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
+    "ask": "node scripts/ask.mjs",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
     "typecheck": "npm run typecheck --workspaces --if-present",
