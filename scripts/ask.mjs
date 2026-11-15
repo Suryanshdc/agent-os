@@ -43,7 +43,7 @@ ws.onmessage = (msg) => {
   const p = e.payload ?? {};
   if (e.type === "task.started") console.log("▶ task started");
   if (e.type === "step.started") console.log(`  … ${p.step} (agent: ${p.agent}, attempt ${p.attempt})`);
-  if (e.type === "step.completed") console.log(`  ✓ ${p.step} done`);
+  if (e.type === "step.completed") console.log(`  ✓ ${p.step} done` + (p.usage ? ` (model: ${p.usage.model}, tier: ${p.usage.tier ?? "n/a"})` : ""));
   if (e.type === "step.failed") console.log(`  ✗ ${p.step} failed: ${p.error}`);
   if (e.type === "task.completed") {
     console.log(`\n✔ DONE (cost $${p.totalCostUsd})\n\n${p.answer}`);

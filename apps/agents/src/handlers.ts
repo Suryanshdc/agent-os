@@ -1,4 +1,4 @@
-import { complete, type AgentRequest, type AgentResult } from "@aios/shared";
+import { complete, routeModel, type AgentRequest, type AgentResult } from "@aios/shared";
 
 export type Handler = (req: AgentRequest) => Promise<Pick<AgentResult, "output" | "usage">>;
 
@@ -16,20 +16,29 @@ const retrieval: Handler = async (req) => {
   return { output: hits.length ? hits.join("\n") : "No relevant context found." };
 };
 
+// Pick the cheapest model that can handle the question (judged on the question only, not the context).
+function pickModel(input: string) {
+  return routeModel(input.split("\n\nContext:")[0] ?? input);
+}
+
 const research: Handler = async (req) => {
+  const { tier, model } = pickModel(req.input);
   const { text, usage } = await complete(
     req.input,
     "You are a research agent. Answer concisely using the provided context when relevant.",
+    { model },
   );
-  return { output: text, usage };
+  return { output: text, usage: { ...usage, tier } };
 };
 
 const codegen: Handler = async (req) => {
+  const { tier, model } = pickModel(req.input);
   const { text, usage } = await complete(
     req.input,
     "You are a code generation agent. Reply with working code in one fenced block, then a short explanation.",
+    { model },
   );
-  return { output: text, usage };
+  return { output: text, usage: { ...usage, tier } };
 };
 
 export const HANDLERS: Record<string, Handler> = { retrieval, research, codegen };

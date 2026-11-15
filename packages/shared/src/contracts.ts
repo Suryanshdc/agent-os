@@ -20,6 +20,7 @@ export type TaskSubmitted = z.infer<typeof TaskSubmittedSchema>;
 
 export interface Usage {
   model: string;
+  tier?: string;
   inputTokens: number;
   outputTokens: number;
   costUsd: number;

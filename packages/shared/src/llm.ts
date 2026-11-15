@@ -1,15 +1,17 @@
 import type { Usage } from "./contracts.js";
-
-// Rough $/million-token prices. Update these to current pricing for your model.
-const PRICE_PER_MTOK = { input: 1, output: 5 };
+import { priceFor } from "./router.js";
 
 export interface LlmResult {
   text: string;
   usage: Usage;
 }
 
-export async function complete(prompt: string, system?: string): Promise<LlmResult> {
-  const model = process.env.LLM_MODEL ?? "claude-haiku-5-5";
+export async function complete(
+  prompt: string,
+  system?: string,
+  opts: { model?: string } = {},
+): Promise<LlmResult> {
+  const model = opts.model ?? process.env.LLM_MODEL ?? "claude-haiku-5-5";
   const started = Date.now();
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -51,7 +53,7 @@ export async function complete(prompt: string, system?: string): Promise<LlmResu
       inputTokens: input_tokens,
       outputTokens: output_tokens,
       costUsd:
-        (input_tokens * PRICE_PER_MTOK.input + output_tokens * PRICE_PER_MTOK.output) / 1_000_000,
+        (input_tokens * priceFor(model).inputPerMTok + output_tokens * priceFor(model).outputPerMTok) / 1_000_000,
       latencyMs: Date.now() - started,
     },
   };
