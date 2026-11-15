@@ -2,6 +2,48 @@
 
 ![Neo4j memory graph](memory-graph.png)
 
+## Architecture
+
+```mermaid
+flowchart LR
+    Client["Client<br/>ask script / WebSocket"]
+    Gateway["Gateway<br/>Fastify, JWT, RBAC"]
+    Kafka[("Kafka<br/>Redpanda")]
+    Orch["Orchestrator<br/>LangGraph.js, retries"]
+    Router{{"Model router<br/>small / medium / large"}}
+    Neo[("Neo4j<br/>memory graph")]
+
+    subgraph Agents
+        Retr["Retrieval agent"]
+        Res["Research agent"]
+        Code["Code Gen agent"]
+    end
+
+    Client -->|"POST /tasks"| Gateway
+    Gateway -->|"tasks.submitted"| Kafka
+    Kafka -->|"new task, agent results"| Orch
+    Orch -->|"agent requests"| Kafka
+    Kafka -->|"agent requests"| Agents
+    Agents -->|"agent.results"| Kafka
+    Orch -->|"task.events"| Kafka
+    Kafka -->|"task.events"| Gateway
+    Gateway -.->|"WebSocket stream"| Client
+
+    Res -->|"picks model"| Router
+    Code -->|"picks model"| Router
+    Retr -->|"recall"| Neo
+    Orch -->|"save task"| Neo
+```
+
+**How a request flows**
+
+1. The client sends a question to the gateway, which checks the JWT and the user's role.
+2. The gateway publishes the task to Kafka.
+3. The orchestrator runs a LangGraph workflow: retrieve context, then route to Code Gen or Research.
+4. Each agent picks the cheapest model tier that can handle the question.
+5. Progress events flow back through Kafka and the gateway to the client over WebSocket.
+6. When a task completes, it is saved to the Neo4j graph so later questions can recall it.
+
 Multi-agent LLM platform: Fastify gateway -> Kafka (Redpanda) -> DAG orchestrator -> agents.
 
 
