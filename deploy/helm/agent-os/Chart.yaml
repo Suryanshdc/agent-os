@@ -1,0 +1,6 @@
+apiVersion: v2
+name: agent-os
+description: Multi-agent LLM platform (gateway, orchestrator, agents)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

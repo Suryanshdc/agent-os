@@ -48,6 +48,26 @@ Multi-agent LLM platform: Fastify gateway -> Kafka (Redpanda) -> DAG orchestrato
 
 ![Grafana dashboard](grafana-dashboard.png)
 
+## Running on Kubernetes (kind)
+
+The services run as pods on a local [kind](https://kind.sigs.k8s.io/) cluster. Kafka (Redpanda) and Neo4j stay in Docker Compose, and the cluster node is attached to the same Docker network so pods can reach them.
+
+![Kubernetes pods](kubernetes-pods.png)
+
+```bash
+docker build -t agent-os:dev .
+kind create cluster --name agent-os --config deploy/kind-config.yaml
+kind load docker-image agent-os:dev --name agent-os
+docker network connect agent-os_default agent-os-control-plane
+kubectl apply -f deploy/agent-os.rendered.yaml
+```
+
+- `deploy/helm/agent-os` is the Helm chart; `deploy/agent-os.rendered.yaml` is its rendered output (`helm template`).
+- Scale an agent: `kubectl scale deployment agent-research --replicas=3`. Kafka consumer groups share the work between replicas.
+- Delete a pod and Kubernetes recreates it.
+
+### Lesson learned
+Kubernetes injects environment variables for every Service (a Service named `gateway` creates `GATEWAY_PORT=tcp://...`), which clashed with the app's own `GATEWAY_PORT`. Fixed with `enableServiceLinks: false`.
 
 ## Run it
 

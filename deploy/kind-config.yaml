@@ -1,0 +1,12 @@
+# Free local Kubernetes cluster. The port mappings expose the pods on your laptop,
+# so `npm run ask` and Prometheus keep working at the same addresses as before.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - { containerPort: 30000, hostPort: 3000 }   # gateway
+      - { containerPort: 30101, hostPort: 9101 }   # orchestrator metrics
+      - { containerPort: 30111, hostPort: 9111 }   # retrieval metrics
+      - { containerPort: 30112, hostPort: 9112 }   # research metrics
+      - { containerPort: 30113, hostPort: 9113 }   # codegen metrics

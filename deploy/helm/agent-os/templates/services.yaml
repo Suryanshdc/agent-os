@@ -1,0 +1,79 @@
+{{- /* One Deployment + one Service per entry in .Values.services */ -}}
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    app: {{ $name }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      # Kubernetes would otherwise inject env vars like GATEWAY_PORT=tcp://10.96.x.x:3000
+      # for every Service, which clashes with our own GATEWAY_PORT setting.
+      enableServiceLinks: false
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          command: {{ toJson $svc.command }}
+          envFrom:
+            - configMapRef:
+                name: agent-os-config
+            - secretRef:
+                name: agent-os-secrets
+          {{- with $svc.env }}
+          env:
+            {{- range $k, $v := . }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
+          ports:
+            - containerPort: {{ $svc.port }}
+          readinessProbe:
+            {{- if $svc.healthPath }}
+            httpGet:
+              path: {{ $svc.healthPath }}
+              port: {{ $svc.port }}
+            {{- else }}
+            tcpSocket:
+              port: {{ $svc.port }}
+            {{- end }}
+            initialDelaySeconds: 8
+            periodSeconds: 5
+          livenessProbe:
+            {{- if $svc.healthPath }}
+            httpGet:
+              path: {{ $svc.healthPath }}
+              port: {{ $svc.port }}
+            {{- else }}
+            tcpSocket:
+              port: {{ $svc.port }}
+            {{- end }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  type: NodePort
+  selector:
+    app: {{ $name }}
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+      nodePort: {{ $svc.nodePort }}
+{{- end }}

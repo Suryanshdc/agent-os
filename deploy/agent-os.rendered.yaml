@@ -1,0 +1,365 @@
+# Generated from deploy/helm/agent-os with: helm template agent-os deploy/helm/agent-os
+---
+# Source: agent-os/templates/config.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: agent-os-secrets
+type: Opaque
+stringData:
+  ANTHROPIC_API_KEY: ""
+  JWT_SECRET: "change-me-in-real-life"
+  NEO4J_PASSWORD: "devpassword"
+
+---
+# Source: agent-os/templates/config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-os-config
+data:
+  KAFKA_BROKERS: "redpanda:9092"
+  LLM_MODEL: "claude-haiku-5-5"
+  NEO4J_URI: "bolt://neo4j:7687"
+  NEO4J_USER: "neo4j"
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-codegen
+spec:
+  type: NodePort
+  selector:
+    app: agent-codegen
+  ports:
+    - port: 9113
+      targetPort: 9113
+      nodePort: 30113
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-research
+spec:
+  type: NodePort
+  selector:
+    app: agent-research
+  ports:
+    - port: 9112
+      targetPort: 9112
+      nodePort: 30112
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-retrieval
+spec:
+  type: NodePort
+  selector:
+    app: agent-retrieval
+  ports:
+    - port: 9111
+      targetPort: 9111
+      nodePort: 30111
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  type: NodePort
+  selector:
+    app: gateway
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30000
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestrator
+spec:
+  type: NodePort
+  selector:
+    app: orchestrator
+  ports:
+    - port: 9101
+      targetPort: 9101
+      nodePort: 30101
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-codegen
+  labels:
+    app: agent-codegen
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-codegen
+  template:
+    metadata:
+      labels:
+        app: agent-codegen
+    spec:
+      # Kubernetes would otherwise inject env vars like GATEWAY_PORT=tcp://10.96.x.x:3000
+      # for every Service, which clashes with our own GATEWAY_PORT setting.
+      enableServiceLinks: false
+      containers:
+        - name: agent-codegen
+          image: "agent-os:dev"
+          imagePullPolicy: IfNotPresent
+          command: ["node_modules/.bin/tsx","apps/agents/src/index.ts"]
+          envFrom:
+            - configMapRef:
+                name: agent-os-config
+            - secretRef:
+                name: agent-os-secrets
+          env:
+            - name: AGENT_NAME
+              value: "codegen"
+          ports:
+            - containerPort: 9113
+          readinessProbe:
+            tcpSocket:
+              port: 9113
+            initialDelaySeconds: 8
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9113
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-research
+  labels:
+    app: agent-research
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-research
+  template:
+    metadata:
+      labels:
+        app: agent-research
+    spec:
+      # Kubernetes would otherwise inject env vars like GATEWAY_PORT=tcp://10.96.x.x:3000
+      # for every Service, which clashes with our own GATEWAY_PORT setting.
+      enableServiceLinks: false
+      containers:
+        - name: agent-research
+          image: "agent-os:dev"
+          imagePullPolicy: IfNotPresent
+          command: ["node_modules/.bin/tsx","apps/agents/src/index.ts"]
+          envFrom:
+            - configMapRef:
+                name: agent-os-config
+            - secretRef:
+                name: agent-os-secrets
+          env:
+            - name: AGENT_NAME
+              value: "research"
+          ports:
+            - containerPort: 9112
+          readinessProbe:
+            tcpSocket:
+              port: 9112
+            initialDelaySeconds: 8
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9112
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-retrieval
+  labels:
+    app: agent-retrieval
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-retrieval
+  template:
+    metadata:
+      labels:
+        app: agent-retrieval
+    spec:
+      # Kubernetes would otherwise inject env vars like GATEWAY_PORT=tcp://10.96.x.x:3000
+      # for every Service, which clashes with our own GATEWAY_PORT setting.
+      enableServiceLinks: false
+      containers:
+        - name: agent-retrieval
+          image: "agent-os:dev"
+          imagePullPolicy: IfNotPresent
+          command: ["node_modules/.bin/tsx","apps/agents/src/index.ts"]
+          envFrom:
+            - configMapRef:
+                name: agent-os-config
+            - secretRef:
+                name: agent-os-secrets
+          env:
+            - name: AGENT_NAME
+              value: "retrieval"
+          ports:
+            - containerPort: 9111
+          readinessProbe:
+            tcpSocket:
+              port: 9111
+            initialDelaySeconds: 8
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9111
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      # Kubernetes would otherwise inject env vars like GATEWAY_PORT=tcp://10.96.x.x:3000
+      # for every Service, which clashes with our own GATEWAY_PORT setting.
+      enableServiceLinks: false
+      containers:
+        - name: gateway
+          image: "agent-os:dev"
+          imagePullPolicy: IfNotPresent
+          command: ["node_modules/.bin/tsx","apps/gateway/src/index.ts"]
+          envFrom:
+            - configMapRef:
+                name: agent-os-config
+            - secretRef:
+                name: agent-os-secrets
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 8
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+---
+# Source: agent-os/templates/services.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  labels:
+    app: orchestrator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+    spec:
+      # Kubernetes would otherwise inject env vars like GATEWAY_PORT=tcp://10.96.x.x:3000
+      # for every Service, which clashes with our own GATEWAY_PORT setting.
+      enableServiceLinks: false
+      containers:
+        - name: orchestrator
+          image: "agent-os:dev"
+          imagePullPolicy: IfNotPresent
+          command: ["node_modules/.bin/tsx","apps/orchestrator/src/index.ts"]
+          envFrom:
+            - configMapRef:
+                name: agent-os-config
+            - secretRef:
+                name: agent-os-secrets
+          ports:
+            - containerPort: 9101
+          readinessProbe:
+            tcpSocket:
+              port: 9101
+            initialDelaySeconds: 8
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9101
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
